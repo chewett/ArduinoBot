@@ -1,8 +1,10 @@
 #define DHT_ENABLED 1
-#define GAS_ENABLED 0
+#define GAS_ENABLED 1
 #define SERVO_ENABLED 0
-#define PING_ENABLED 0
-#define LED_MATRIX_ENABLED 0
+#define PING_ENABLED 1
+#define LED_MATRIX_ENABLED 1
+#define MOTION_SENSOR 1
+#define SOUND_SENSOR_ARRAY 1
 
 #if SERVO_ENABLED
 #include <Servo.h>
@@ -15,8 +17,8 @@ int greenPin = 8;
 
 #if PING_ENABLED
 #include <NewPing.h>
-#define TRIGGER_PIN  12  // Arduino pin tied to trigger pin on the ultrasonic sensor.
-#define ECHO_PIN     11  // Arduino pin tied to echo pin on the ultrasonic sensor.
+#define TRIGGER_PIN  8  // Arduino pin tied to trigger pin on the ultrasonic sensor.
+#define ECHO_PIN     9  // Arduino pin tied to echo pin on the ultrasonic sensor.
 #define MAX_DISTANCE 200 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
 
 NewPing sonar(TRIGGER_PIN, ECHO_PIN, MAX_DISTANCE); // NewPing setup of pins and maximum distance.
@@ -26,9 +28,9 @@ int getPingCm() {
   delay(200);
   int distance = 0;
   unsigned int uS = sonar.ping();
-  uS = sonar.ping(); //Do ping twice as the first time after powering off/on is sometimes 0
+  //uS = sonar.ping(); //Do ping twice as the first time after powering off/on is sometimes 0
   distance = uS / US_ROUNDTRIP_CM;
-  if(distance == 0) { 
+  if(false && distance == 0) { 
     digitalWrite(pingPower, LOW);
     delay(2000);
     digitalWrite(pingPower, HIGH);
@@ -39,7 +41,6 @@ int getPingCm() {
 }
 
 int getPingCmBasic() {
-  delay(200);
   int distance = 0;
    unsigned int uS = sonar.ping();
   distance = uS / US_ROUNDTRIP_CM;
@@ -51,17 +52,26 @@ int getPingCmBasic() {
 
 #if DHT_ENABLED
 #include "DHT.h"
-#define DHTPIN 4     // what digital pin we're connected to
+#define DHTPIN 7     // what digital pin we're connected to
 #define DHTTYPE DHT11   // DHT 11
 
 DHT dht(DHTPIN, DHTTYPE);
 #endif
 
-
 #if LED_MATRIX_ENABLED
 #include "LedControl.h"
 
-LedControl lc=LedControl(12,11,10,1);
+LedControl lc=LedControl(12,11,10,2);
+#endif
+
+#if MOTION_SENSOR
+#define MOTION_SENSOR_PIN 1
+#endif
+
+#if SOUND_SENSOR_ARRAY
+#define SOUND_SENSOR_PIN1 13
+#define SOUND_SENSOR_PIN2 14
+#define SOUND_SENSOR_PIN3 15
 #endif
 
 int sensorValue;
@@ -83,6 +93,9 @@ void setup() {
   lc.shutdown(0,false);
   lc.setIntensity(0,1);
   lc.clearDisplay(0);
+    lc.shutdown(1,false);
+  lc.setIntensity(1,1);
+  lc.clearDisplay(1);
 #endif
   
   /*
@@ -115,16 +128,17 @@ void loop() {
 #if LED_MATRIX_ENABLED
 long randNumber;
 
-for(int i = 0; i < 8; i++) {
-  randNumber = random(0, 255);
-  lc.setRow(0,i, (byte)randNumber);
- 
+for(int set = 0; set < 2; set++) {
+  for(int i = 0; i < 8; i++) {
+    randNumber = random(0, 255);
+    lc.setRow(set,i, (byte)randNumber);
+  }
 }
  delay(1000);
 #endif
 
 
-
+Serial.print("{");
 #if DHT_ENABLED
 float h = dht.readHumidity();
 // Read temperature as Celsius (the default)
@@ -138,24 +152,47 @@ if (isnan(h) || isnan(t)) {
 
 sensorValue = analogRead(0);       // read analog input pin 0
 
-Serial.print("{\"humidity\": \"");
+Serial.print("\"humidity\": \"");
 Serial.print(h);
 Serial.print("\", \"temp\": \"");
 Serial.print(t);
 Serial.print("\", \"toxicity\": \"");
 Serial.print(sensorValue);
-Serial.println("\"}");
+Serial.print("\",");
 
+#endif
 
-delay(1000);                        // wait 100ms for next reading
+#if MOTION_SENSOR
+sensorValue = analogRead(MOTION_SENSOR_PIN);
+Serial.print("\"motion\": \"");
+Serial.print(sensorValue);
+Serial.print("\",");
+#endif
+
+#if SOUND_SENSOR_ARRAY
+sensorValue = analogRead(SOUND_SENSOR_PIN1);
+Serial.print("\"sound1\": \"");
+Serial.print(sensorValue);
+Serial.print("\",");
+sensorValue = analogRead(SOUND_SENSOR_PIN2);
+Serial.print("\"sound2\": \"");
+Serial.print(sensorValue);
+Serial.print("\",");
+sensorValue = analogRead(SOUND_SENSOR_PIN3);
+Serial.print("\"sound3\": \"");
+Serial.print(sensorValue);
+Serial.print("\",");
 #endif
 
 
 #if PING_ENABLED
-  Serial.print("Ping: ");
-  Serial.print(getPingCm());
-  Serial.println("cm");
+Serial.print("\"distance\": \"");
+Serial.print(getPingCmBasic());
+Serial.print("\",");
 #endif  
+  
+Serial.println("\"sending\":\"true\"}");
+
   
   /*
   while (Serial.available() == 0);
